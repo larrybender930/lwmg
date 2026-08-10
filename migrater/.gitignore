@@ -1,0 +1,7 @@
+node_modules/
+package-lock.json
+
+# Staged downloads, the work-dir lockfile, this worker's generated identity and
+# its cached auth token.
+work/
+*.log
