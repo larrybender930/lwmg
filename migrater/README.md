@@ -70,6 +70,49 @@ cost zero bytes.
 This process holds no Wasabi credentials. The API signs each part, and the worker
 only PUTs bytes at the URL it is handed.
 
+## Throughput
+
+BunnyCDN shapes each connection to about **6 MB/s** and does not slow down when
+more files are in flight. Uploading to Wasabi takes ~2s per file. So this is
+purely download-bound and the arithmetic is simply:
+
+```
+throughput  ≈  CONCURRENCY × 6 MB/s
+```
+
+`CONCURRENCY: 40` gives roughly 240 MB/s (~1.9 Gbps). Two things cap how far it
+goes:
+
+| ceiling | where it bites |
+|---|---|
+| `/video/init` is limited to **60/min per IP** | 60 files/min. A ~430 MB episode takes ~74s end to end, so this is reached around **CONCURRENCY 70**. Movies are bigger, take longer, and allow more. |
+| **disk** — every in-flight task stages a whole file | keep `MAX_DISK_GB` near `CONCURRENCY × 1 GB` and under the volume's free space. Tasks that would not fit are handed straight back, so the budget is enforced, not advisory. |
+
+Past that, add servers: both limits are per IP, so a second box doubles them.
+
+At 40 concurrent, the ~17 TB backlog is roughly a day of wall-clock on one
+server; at 70 it is closer to twelve hours.
+
+To confirm the 6 MB/s figure on a new server, or after moving regions:
+
+```bash
+cd ~/lwmg/migrater && npm run bench
+```
+
+It borrows one real task, pulls the same data over 1/4/8/16 connections, then
+hands the task back. If per-connection speed stays flat while the total climbs,
+raise `CONCURRENCY`. If it divides while the total stays flat, that box is
+against a shared ceiling and only more servers will help.
+
+**Location still matters.** Sources come from BunnyCDN's nearest edge and the
+bucket is Wasabi `eu-south-1` (Milan), so a European server is close to both
+legs. If a new server benches well below 6 MB/s per connection, it is probably
+in the wrong place.
+
+Note that a portion of the legacy catalogue is expired MediaFire links rather
+than CDN files. Those answer with HTML, fail the MP4 check, and are marked
+`not-mp4` without a single byte reaching Wasabi.
+
 ## Settings
 
 Everything is in [config.js](config.js) — API origin, credentials, concurrency and

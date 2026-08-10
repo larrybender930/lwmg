@@ -30,8 +30,24 @@ module.exports = {
   USERNAME:  'migrater',
   PASSWORD: 'C3theLoadPPP',
 
-  BATCH_SIZE: num(process.env.BATCH_SIZE, 10),            // tasks per claim
-  CONCURRENCY: num(process.env.CONCURRENCY, 2),           // tasks at once here
+  // BunnyCDN shapes each connection to roughly 6 MB/s and does not slow down
+  // when more files are in flight, so throughput here is simply
+  // CONCURRENCY x 6 MB/s. Uploading to Wasabi takes about 2s per file and is
+  // never the constraint. Two ceilings bound this:
+  //
+  //   API   /video/init is rate limited to 60 per minute per IP, i.e. 60 files
+  //         per minute. A ~430 MB episode takes ~74s end to end, so that cap is
+  //         reached at about CONCURRENCY 70. Movies are bigger and take longer,
+  //         so they allow more.
+  //   DISK  every in-flight task stages a whole file. Keep MAX_DISK_GB at
+  //         roughly CONCURRENCY x 1 GB, and below the volume's free space.
+  //         Tasks that would not fit are handed straight back, so the budget is
+  //         enforced rather than merely advisory.
+  //
+  // Raise CONCURRENCY toward 70 if the disk allows. Beyond that, add servers:
+  // the limits above are per IP, so a second box doubles them.
+  BATCH_SIZE: num(process.env.BATCH_SIZE, 25),            // tasks per claim (API caps at 50)
+  CONCURRENCY: num(process.env.CONCURRENCY, 40),          // ~240 MB/s at 6 MB/s per file
   PART_CONCURRENCY: num(process.env.PART_CONCURRENCY, 3), // part PUTs per task
 
   WORK_DIR: process.env.WORK_DIR || './work',
