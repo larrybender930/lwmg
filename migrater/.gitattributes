@@ -1,0 +1,4 @@
+# install.sh is fetched straight from GitHub and piped into bash on a Linux VPS.
+# Committed with CRLF it would fail there with `$'\r': command not found`, so pin
+# the line endings regardless of how any contributor's core.autocrlf is set.
+*.sh text eol=lf
